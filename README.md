@@ -4,9 +4,8 @@ A robotics prototype developed for **UC San Diego ECE/MAE 148** that combines Ap
 
 **My role:** Hardware integration, Arduino motor control, power distribution, and system debugging.
 
-<!-- Add a clear photo of the assembled robot here:
-![Robobutler assembled prototype](media/robobutler.jpg)
--->
+![Robobutler assembled prototype](media/robot.jpg)
+
 
 ## Overview
 
@@ -15,6 +14,10 @@ Walking between classes across UCSD's large campus can be tiring, especially whi
 Robobutler uses an **AprilTag as the visual target** for following a person. To make stored items easier to reach, the design combines a **servo-driven rotating compartment** with a **stepper-driven scissor lift**. Hand gestures select a compartment position and command the lift to extend or return. The intended lift travel was approximately a couple of feet, bringing items closer to the user's reach.
 
 The project consists of two subsystems: autonomous navigation and gesture-controlled actuation. **These subsystems were tested separately; automatic transition from navigation to gesture control remains future work.** The prototype explores the campus carrying concept; backpack payload capacity and full campus operation have not been established in the project documentation.
+
+https://youtu.be/hY5M1MJWAxY
+
+https://youtube.com/shorts/GXT1gASVuJs
 
 ## My Contributions
 
@@ -53,9 +56,48 @@ The Raspberry Pi processes OAK-D Lite images with MediaPipe Hands and sends text
 
 The firmware supports four configured compartment positions. Once the lift is extended, additional position-selection commands are ignored until a return command retracts it. A Flask video stream displays gesture recognition results for testing.
 
-<!-- Add a signal-flow diagram here:
-![System signal flow](media/system_architecture.png)
--->
+## System Signal Flow
+
+```mermaid
+flowchart TD
+    CAM["OAK-D Lite Camera"]
+
+    subgraph NAV["Autonomous Navigation — Raspberry Pi"]
+        TAG["AprilTag Detection"]
+        DEPTH["Ground / Obstacle Detection"]
+        EKF["EKF State Estimation"]
+        PLAN["Path Planning"]
+        CTRL["Pure Pursuit Controller"]
+
+        TAG --> PLAN
+        DEPTH --> PLAN
+        TAG --> EKF
+        PLAN --> CTRL
+    end
+
+    CAM -->|"RGB images"| TAG
+    CAM -->|"RGB and depth"| DEPTH
+    CTRL -->|"USB serial"| VESC["VESC Motor Controller"]
+    VESC --> DRIVE["Drive Motor"]
+    VESC --> STEER["Steering Servo"]
+
+    subgraph GEST["Gesture Control — Raspberry Pi"]
+        HAND["MediaPipe Hand Landmarks"]
+        CLASS["Gesture Classification and Filtering"]
+        HAND --> CLASS
+    end
+
+    CAM -->|"RGB images"| HAND
+    CLASS -->|"USB serial commands"| ARD["Arduino Mega"]
+    ARD -->|"Servo pulses"| SERVO["Compartment Servo"]
+    SERVO --> ROTATE["Storage Compartment Rotation"]
+    ARD -->|"STEP / DIR"| DRIVER["DRV8825 Driver"]
+    DRIVER -->|"Motor coil currents"| STEP["Stepper Motor"]
+    STEP --> LIFT["Scissor Lift Extension / Retraction"]
+```
+
+**Note:** Navigation and gesture-controlled actuation were tested separately. Automatic switching between them remains future work. The EKF branch is shown separately because the current controller does not use its estimated velocity for speed feedback. Power wiring is omitted from this diagram.
+
 
 ## Hardware and Software
 
