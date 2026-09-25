@@ -1,0 +1,24 @@
+# VisCarPath Project Dependencies
+# Updated for depthai v2 API compatibility and OpenCV variants
+
+# Core computer vision - choose ONE based on environment:
+# For local execution (with GUI/display support via cv2.imshow()):
+opencv-python>=4.5.0
+
+# For cloud/server execution (headless, no GUI - e.g., GitHub Codespaces, Docker):
+# opencv-python-headless>=4.5.0
+
+# AprilTag detection
+# NOTE: The code uses 'pupil_apriltags' (Python bindings for the C++ AprilTag detector).
+# Do NOT install 'apriltag' as it uses a different API and will cause import errors.
+pupil-apriltags>=1.0.0
+
+# DepthAI - PINNED TO V2 API (v3.0+ has breaking changes)
+depthai<3.0.0
+
+# Scientific computing & linear algebra
+numpy>=1.20.0
+scipy>=1.7.0
+ultralytics>=8.0.0  # For FastSAM integration (if using FastSAM for segmentation)
+torch>=1.10.0  # Required for FastSAM (if using FastSAM for segmentation)
+torchvision>=0.11.0  # Required for FastSAM (if using FastSAM for segmentation)
