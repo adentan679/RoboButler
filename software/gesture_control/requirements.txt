@@ -1,11 +1,6 @@
-# Documented gesture-control environment
+# Matches versions documented in the original team setup.
+# Availability on your Pi/Python combination still needs verification.
+depthai==3.6.1
+mediapipe==0.10.18
 numpy==1.26.4
 opencv-contrib-python==4.11.0.86
-mediapipe==0.10.18
-depthai==3.6.1
-
-# Browser video stream
-Flask
-
-# Raspberry Pi-to-Arduino serial communication
-pyserial

@@ -5,8 +5,8 @@ No pyvesc dependency - uses raw VESC protocol over pyserial only
 
 import serial
 import struct
-import glob   # CHANGED (Lalo 6/11): needed for port auto-detection
-import time   # CHANGED (Lalo 6/11): needed for reconnect delay
+import os
+import math
 
 def _crc_ccitt(data: bytes) -> int:
     """VESC uses CRC-CCITT for packet integrity"""
@@ -51,22 +51,18 @@ def _pack_duty(duty: float) -> bytes:
     return _build_packet(payload)
 
 
-# CHANGED (Lalo 6/11): new helper — VESC and Arduino can swap ACM0/ACM1
-# between boots. This tries the preferred port, then /dev/serial/by-id/
-# (stable names), then any ACM port, so we stop talking to the wrong device.
 def _find_vesc_port(preferred: str) -> str:
-    candidates = [preferred]
-    candidates += sorted(glob.glob('/dev/serial/by-id/*'))
-    candidates += sorted(glob.glob('/dev/ttyACM*'))
-    for p in candidates:
-        if p and glob.glob(p):
-            return p
+    """Require an operator-verified stable path; never guess another device."""
+    if not preferred or not preferred.startswith('/dev/serial/by-id/'):
+        raise ValueError("Set --vesc-port to the verified /dev/serial/by-id/ VESC path")
+    if not os.path.exists(preferred):
+        raise FileNotFoundError(preferred)
     return preferred
 
 
 class VESCBridge:
     def __init__(self,
-                 port: str = '/dev/ttyACM0',
+                 port: str = None,
                  baud_rate: int = 115200,
                  max_duty: float = 0.07,       # CHANGED (Lalo 6/11): calibrated on floor - slowest reliable speed, locked as ceiling
                  min_duty: float = 0.07,       # CHANGED (Lalo 6/11): floor == ceiling -> single fixed crawl speed
@@ -82,41 +78,12 @@ class VESCBridge:
         self.servo_center  = 0.5
         self.servo_range   = servo_range    # CHANGED (Lalo 6/11): was hardcoded 0.3
         self.steer_sign    = -1.0 if invert_steering else 1.0  # CHANGED (Lalo 6/11): new
-        self.port          = _find_vesc_port(port)   # CHANGED (Lalo 6/11): port auto-detection
-        self.baud_rate     = baud_rate                # CHANGED (Lalo 6/11): stored for reconnect
+        self.port          = _find_vesc_port(port)
+        self.baud_rate     = baud_rate
 
-        # CHANGED (Lalo 6/11): state for coast-through-blindness smoothing
-        self._last_accel   = 0.0
-        self._last_steer   = 0.0
-        self._coast_count  = 0
-
-        try:
-            self.serial = serial.Serial(self.port, self.baud_rate, timeout=0.1)
-            print(f"[VESC] Connected on {self.port}")
-        except serial.SerialException as e:
-            print(f"[VESC] Connection failed: {e}")
-            self.serial = None
-
-    # CHANGED (Lalo 6/11): new method — one Errno 5 used to kill all motor
-    # commands for the rest of the run. Now we try to reopen the port once.
-    def _reconnect(self):
-        try:
-            if self.serial:
-                self.serial.close()
-        except Exception:
-            pass
-        time.sleep(0.2)
-        self.port = _find_vesc_port(self.port)
-        try:
-            self.serial = serial.Serial(self.port, self.baud_rate, timeout=0.1)
-            print(f"[VESC] Reconnected on {self.port}")
-        except serial.SerialException as e:
-            print(f"[VESC] Reconnect failed: {e}")
-            self.serial = None
-
-    # CHANGED (Lalo 6/11): removed _normalize_accel and _normalize_steer.
-    # They double-normalized already-normalized controller outputs (the
-    # steering-killer bug). Inputs to send_command are [-1, 1] and used directly.
+        # Connection failures propagate: do not silently run without control.
+        self.serial = serial.Serial(self.port, self.baud_rate,
+                                    timeout=0.1, write_timeout=0.2)
 
     def _cmd_to_duty(self, accel_cmd: float) -> float:
         # CHANGED (Lalo 6/11): replaces _accel_to_erpm — maps [-1, 1] to duty
@@ -139,58 +106,36 @@ class VESCBridge:
         return float(max(0.0, min(1.0, servo)))
 
     def send_command(self, accel: float, steer_rate: float):
-        # NOTE (Lalo 6/11): parameter names kept identical to the original so
-        # main_navigation.py needs NO changes. Both values are the controller's
-        # normalized [-1, 1] outputs.
-        if self.serial is None:
-            self._reconnect()                          # CHANGED (Lalo 6/11): try to recover
-            if self.serial is None:
-                print("[VESC] No connection — skipping command")
-                return
-
-        # CHANGED (Lalo 6/11): coast-through-blindness. The state machine sends
-        # accel=0 the instant tag detection blinks (every few frames at 10 FPS),
-        # causing stop-start stutter. If we were just driving, hold the last
-        # command for up to coast_frames before actually stopping. A real stop
-        # (tag lost for ~1s, obstacle, target reached) still stops the car
-        # once the grace period expires. NOTE: only safe at crawl speeds -
-        # shrink coast_frames before raising max_duty.
-        coast_frames = 8   # ~0.8s of grace at 10 FPS
-        if accel <= 0.0 and self._last_accel > 0.0 and self._coast_count < coast_frames:
-            self._coast_count += 1
-            accel = self._last_accel
-            steer_rate = self._last_steer
-        else:
-            if accel > 0.0:
-                self._coast_count = 0
-            self._last_accel = accel
-            self._last_steer = steer_rate
-
-        duty  = self._cmd_to_duty(accel)               # CHANGED (Lalo 6/11): was ERPM path
-        servo = self._steer_to_servo(steer_rate)       # CHANGED (Lalo 6/11): no double normalize
-
+        """Send normalized commands. Zero duty is NOT confirmed braking."""
+        if not math.isfinite(accel) or not math.isfinite(steer_rate):
+            self.stop()
+            raise ValueError("Non-finite drive command")
+        duty = self._cmd_to_duty(accel)
+        servo = self._steer_to_servo(steer_rate)
+        # Send zero duty first so steering failure cannot delay a stop request.
+        # Do not retain positive commands when navigation requests zero.
         try:
-            self.serial.write(_pack_servo(servo))
-            self.serial.write(_pack_duty(duty))        # CHANGED (Lalo 6/11): was _pack_rpm(erpm)
-            print(f"[VESC] Duty: {duty:+.3f} | Servo: {servo:.3f} "
-                  f"(accel={accel:+.2f}, steer={steer_rate:+.2f})")
-        except Exception as e:
-            print(f"[VESC] Send error: {e} — attempting reconnect")
-            self._reconnect()                          # CHANGED (Lalo 6/11): recover instead of dying
+            self._write(_pack_duty(duty))
+            self._write(_pack_servo(servo))
+        except Exception:
+            try:
+                self.stop()
+            except Exception:
+                pass
+            raise  # Supervisor must latch a fault; no automatic reconnect/resume.
+
+    def _write(self, packet: bytes):
+        if self.serial.write(packet) != len(packet):
+            raise IOError("Incomplete VESC serial write")
 
     def stop(self):
-        """Emergency stop"""
-        if self.serial:
-            try:
-                self.serial.write(_pack_servo(self.servo_center))
-                self.serial.write(_pack_duty(0.0))     # CHANGED (Lalo 6/11): was _pack_rpm(0)
-                print("[VESC] Emergency stop sent")
-            except Exception as e:
-                print(f"[VESC] Stop error: {e}")
+        """Request zero duty; this does not prove physical standstill."""
+        self._write(_pack_duty(0.0))
+        self._write(_pack_servo(self.servo_center))
 
     def close(self):
-        """Clean shutdown"""
-        self.stop()
-        if self.serial:
+        """Always release serial even if the stop request fails."""
+        try:
+            self.stop()
+        finally:
             self.serial.close()
-            print("[VESC] Connection closed")

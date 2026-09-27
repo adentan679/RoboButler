@@ -61,7 +61,6 @@ class PathFollowingController:
         # 2. PURE PURSUIT (Camera Frame)
         # Camera frame convention (OpenCV): X=lateral(right), Y=vertical(down), Z=forward
         target_fwd, target_lat = None, None
-        nearest_endpoint = None
         for pt in path:
             if hasattr(pt, 'end'):
                 lat, _, fwd = pt.end[0], pt.end[1], pt.end[2]
@@ -69,16 +68,10 @@ class PathFollowingController:
                 lat, fwd = pt[0], pt[1] # Fallback for 2D arrays
             
             dist = np.hypot(fwd, lat)
-            if not np.isfinite(dist) or not np.isfinite(fwd) or fwd <= 0 or dist < 1e-6:
-                continue
-            nearest_endpoint = (fwd, lat)
             if dist >= self.config.lookahead_dist:
                 target_fwd, target_lat = fwd, lat
                 break
                 
-        if target_fwd is None and nearest_endpoint is not None:
-            target_fwd, target_lat = nearest_endpoint
-
         if target_fwd is None:
             # No valid waypoint: brake smoothly to a stop
             print("[MPC]   - No valid waypoint found, braking to stop")
@@ -91,8 +84,7 @@ class PathFollowingController:
         alpha = np.arctan2(target_lat, target_fwd)
         print(f"[MPC]   - Heading error (alpha): {np.degrees(alpha):.1f}°")
         
-        effective_lookahead = max(0.05, float(np.hypot(target_fwd, target_lat)))
-        curvature = (2.0 * np.sin(alpha)) / effective_lookahead
+        curvature = (2.0 * np.sin(alpha)) / self.config.lookahead_dist
         target_steering = np.clip(curvature * self.config.wheelbase, 
                                   -self.config.max_steer_angle, 
                                   self.config.max_steer_angle)

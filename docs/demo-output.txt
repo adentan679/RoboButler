@@ -1,0 +1,19 @@
+SIMULATION ONLY: no camera, serial port, or motor opened.
+ACTUATOR STOWED
+MODE STARTING_NAV | lift=STOWED
+MODE NAVIGATION | lift=STOWED
+MODE STOPPING | lift=STOWED
+SIMULATED confirmation: vehicle stopped
+MODE RELEASING_NAV | lift=STOWED
+MODE STARTING_GESTURE | lift=STOWED
+MODE GESTURE | lift=STOWED
+ACTUATOR EXTENDED
+ACTUATOR RETRACTED_UNVERIFIED
+SIMULATED confirmation: mechanism stowed
+ACTUATOR STOWED
+THUMBS_UP confirmed: returning to navigation
+MODE RELEASING_GESTURE | lift=STOWED
+MODE STARTING_NAV | lift=STOWED
+MODE NAVIGATION | lift=STOWED
+PASS: navigation -> gesture -> extend -> retract -> confirmed stow -> thumbs-up -> navigation
+MODE SHUTDOWN | lift=STOWED

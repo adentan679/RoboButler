@@ -30,8 +30,8 @@ from vesc_bridge import VESCBridge
 # ---------------------------------------------------------------------------
 # Tunable constants
 # ---------------------------------------------------------------------------
-APRILTAG_INTERVAL = 1       # Run tag detection every N frames
-GROUND_INTERVAL   = 1       # Run ground/obstacle perception every N frames
+APRILTAG_INTERVAL = 3       # Run tag detection every N frames
+GROUND_INTERVAL   = 2       # Run ground/obstacle perception every N frames
 LOG_INTERVAL      = 20      # Save debug image every N frames (headless mode)
 PIPELINE_MODE     = "optimized"  # "optimized" | "high_accuracy"
 DEPTH_MEDIAN_K    = 3       # medianBlur kernel on raw depth
@@ -120,16 +120,7 @@ def _build_oakd_pipeline(mode: str = PIPELINE_MODE) -> dai.Pipeline:
 class AutonomousNavigator:
     def __init__(self, robot_width: float = 0.5,
                  target_tag_id: Optional[int] = None,
-                 fastsam_model: str = "FastSAM-s.pt",
-                 vesc_port: Optional[str] = None,
-                 camera_only: bool = False,
-                 arrival_distance: float = 0.5):
-        self.arrival_distance = arrival_distance
-        self.camera_only = camera_only
-        self.frame_timestamp = 0.0
-        self.frame_sequence = -1
-        self.target_distance = None
-        self.vesc_port = vesc_port
+                 fastsam_model: str = "FastSAM-s.pt"):
         self.tag_detector    = AprilTagDetector(tag_family="tag36h11",
                                                 quad_decimate=2.0)
         self.ground_pipeline = GroundAndObstaclePipeline(robot_width=robot_width,
@@ -211,20 +202,14 @@ class AutonomousNavigator:
 
         self.navigation_state = NavigationState.DETECTING_TAGS
         print(f"[NAV] OAK-D ready | fx={fx:.1f} fy={fy:.1f} | mode={PIPELINE_MODE}")
-        if not self.camera_only:
-            self.vesc = VESCBridge(port=self.vesc_port)
+        self.vesc = VESCBridge(port='/dev/ttyACM0')
 
     def stop(self):
-        errors = []
-        for resource in (self.vesc, self.device, self.ground_pipeline.fusion):
-            if resource is not None:
-                try:
-                    resource.close()
-                except Exception as exc:
-                    errors.append(exc)
-        self.vesc = self.device = None
-        if errors:
-            raise RuntimeError("Navigation cleanup failed") from errors[0]
+        if self.vesc:
+            self.vesc.close()
+        if self.device is not None:
+            self.device.close()
+            self.device = None
 
     # ------------------------------------------------------------------
     # Frame capture (non-blocking)
@@ -237,21 +222,11 @@ class AutonomousNavigator:
         depth_pkt = self.q_depth.tryGet()
         if rgb_pkt is None or depth_pkt is None:
             return None, None, None
-        now = time.monotonic()
-        rgb_time = rgb_pkt.getTimestamp().total_seconds()
-        depth_time = depth_pkt.getTimestamp().total_seconds()
-        if abs(rgb_time - depth_time) > 0.05 or not 0 <= now - rgb_time < 0.5:
-            return None, None, None
-        sequence = rgb_pkt.getSequenceNum()
-        if sequence <= self.frame_sequence:
-            return None, None, None
-        self.frame_sequence, self.frame_timestamp = sequence, rgb_time
-        rgb = rgb_pkt.getCvFrame()
+        rgb   = rgb_pkt.getCvFrame()
         depth = cv2.medianBlur(depth_pkt.getFrame(), DEPTH_MEDIAN_K)
+        # FIX: read confidence non-blocking; returns None if not ready (handled below)
         conf_pkt = self.q_conf.tryGet() if self.q_conf else None
-        conf = None
-        if conf_pkt is not None and abs(conf_pkt.getTimestamp().total_seconds() - depth_time) <= 0.05:
-            conf = conf_pkt.getFrame()
+        conf     = conf_pkt.getFrame() if conf_pkt is not None else self.last_conf
         return rgb, depth, conf
 
     # ------------------------------------------------------------------
@@ -283,8 +258,6 @@ class AutonomousNavigator:
         elif tag_detections:
             target_tag = min(tag_detections, key=lambda t: t.distance)
             self.target_tag_id = target_tag.tag_id
-
-        self.target_distance = float(target_tag.distance) if target_tag else None
 
         # -- Static landmark mapping --
         static_tags = [t for t in tag_detections if t.tag_id != self.target_tag_id]
@@ -330,7 +303,7 @@ class AutonomousNavigator:
         old_state = self.navigation_state
         if target_tag is None:
             self.navigation_state = NavigationState.DETECTING_TAGS
-        elif target_tag.distance <= self.arrival_distance:
+        elif target_tag.distance < 0.5:
             self.navigation_state = NavigationState.TARGET_REACHED
         elif obstacles and min(o.distance for o in obstacles) < 1.0:
             self.navigation_state = NavigationState.OBSTRUCTED
@@ -579,20 +552,13 @@ def main():
                         help="Directory for headless debug images")
     parser.add_argument("--fastsam-model", type=str, default="FastSAM-s.pt",
                         help="Path to FastSAM weights file (default: FastSAM-s.pt)")
-    parser.add_argument("--vesc-port", required=True,
-                        help="Verified /dev/serial/by-id/ VESC device path")
     args = parser.parse_args()
 
     navigator = AutonomousNavigator(
         robot_width=args.robot_width,
         target_tag_id=args.target,
-        fastsam_model=args.fastsam_model,
-        vesc_port=args.vesc_port)
-    try:
-        navigator.start()
-    except BaseException:
-        navigator.stop()
-        raise
+        fastsam_model=args.fastsam_model)
+    navigator.start()
 
     if args.visual:
         navigator.run_visual()
@@ -600,7 +566,6 @@ def main():
         navigator.run_headless(log_dir=args.log_dir)
     else:
         navigator.run_bare()
-
 
 
 if __name__ == "__main__":

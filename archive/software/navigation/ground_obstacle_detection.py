@@ -516,8 +516,6 @@ class RGBDepthFusion:
         self.floor_hsv_mean: Optional[np.ndarray] = None
         self.floor_hsv_std:  Optional[np.ndarray] = None
 
-        self._closing         = threading.Event()
-        self.error            = None
         self._lock            = threading.Lock()
         self._latest_masks:   List[np.ndarray]       = []
         self._pending_frame:  Optional[np.ndarray]   = None
@@ -530,37 +528,24 @@ class RGBDepthFusion:
     # Background worker
     # ------------------------------------------------------------------
     def _worker(self):
-        try:
-            while not self._closing.is_set():
-                frame = None
-                with self._lock:
-                    if self._pending_frame is not None:
-                        frame, self._pending_frame = self._pending_frame, None
-                if frame is None:
-                    self._closing.wait(0.005)
-                    continue
-                masks = self._run_fastsam_sync(frame)
-                with self._lock:
-                    self._latest_masks = masks
-        except Exception as exc:
-            self.error = exc
-
-    def close(self):
-        self._closing.set()
-        self._thread.join(timeout=2.0)
-        if self._thread.is_alive():
-            raise RuntimeError("FastSAM worker did not stop within two seconds")
+        while True:
+            frame = None
+            with self._lock:
+                if self._pending_frame is not None:
+                    frame, self._pending_frame = self._pending_frame, None
+            if frame is None:
+                time.sleep(0.005)
+                continue
+            masks = self._run_fastsam_sync(frame)
+            with self._lock:
+                self._latest_masks = masks
 
     def submit_frame(self, rgb_frame: np.ndarray):
         """Queue a frame for FastSAM inference (drops stale pending frame)."""
-        if self.error is not None:
-            raise RuntimeError("FastSAM worker failed") from self.error
         with self._lock:
             self._pending_frame = rgb_frame.copy()
 
     def get_latest_masks(self) -> List[np.ndarray]:
-        if self.error is not None:
-            raise RuntimeError("FastSAM worker failed") from self.error
         with self._lock:
             return list(self._latest_masks)
 

@@ -1,0 +1,2 @@
+# Supervisor only. The default simulator needs no third-party packages.
+pyserial>=3.5,<4

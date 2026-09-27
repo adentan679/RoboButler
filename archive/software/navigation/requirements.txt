@@ -1,0 +1,18 @@
+# Computer vision
+opencv-python>=4.5.0
+pupil-apriltags>=1.0.0
+
+# Navigation code uses the DepthAI v2 API
+depthai>=2.0.0,<3.0.0
+
+# Scientific computing
+numpy>=1.20.0
+scipy>=1.7.0
+
+# FastSAM segmentation
+ultralytics>=8.0.0
+torch>=1.10.0
+torchvision>=0.11.0
+
+# VESC serial communication
+pyserial

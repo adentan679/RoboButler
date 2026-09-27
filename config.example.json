@@ -1,0 +1,21 @@
+{
+  "hardware_reviewed": false,
+  "target_id": 0,
+  "arrival_m": 0.5,
+  "arrival_frames": 3,
+  "frame_timeout": 1.0,
+  "startup_timeout": 60.0,
+  "release_timeout": 5.0,
+  "stop_confirm_timeout": 60.0,
+  "motion_timeout": 8.0,
+  "stable_frames": 5,
+  "tag_size_m": 0.15,
+  "fastsam_model": "software/navigation/FastSAM-s.pt",
+  "navigation_python": "/home/pi/robobutler-nav/bin/python",
+  "gesture_python": "/home/pi/robobutler-gesture/bin/python",
+  "vesc_port": "/dev/serial/by-id/REPLACE_WITH_VERIFIED_VESC",
+  "arduino_port": "/dev/serial/by-id/REPLACE_WITH_VERIFIED_ARDUINO",
+  "preview_port": 0,
+  "resume_hold_seconds": 2.0,
+  "resume_max_gap_seconds": 0.3
+}
