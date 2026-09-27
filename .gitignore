@@ -1,0 +1,37 @@
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+oak_env/
+
+# Local environment variables
+.env
+.env.*
+!.env.example
+
+# Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Generated logs
+*.log
+nav_logs/
+
+# Downloaded navigation model
+FastSAM-s.pt
+
+# Temporary files
+*.tmp
+*.bak

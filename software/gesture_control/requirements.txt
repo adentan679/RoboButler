@@ -1,0 +1,11 @@
+# Documented gesture-control environment
+numpy==1.26.4
+opencv-contrib-python==4.11.0.86
+mediapipe==0.10.18
+depthai==3.6.1
+
+# Browser video stream
+Flask
+
+# Raspberry Pi-to-Arduino serial communication
+pyserial
