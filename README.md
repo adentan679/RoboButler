@@ -1,162 +1,150 @@
-# Robobutler — Person-Following Rover with Gesture-Controlled Item Access
+# RoboButler — Person-Following Rover with Gesture-Controlled Item Access
 
-A robotics prototype developed for **UC San Diego ECE/MAE 148** that combines AprilTag-based navigation with a rotating storage compartment and a motorized scissor lift.
+A robotics prototype developed for **UC San Diego ECE/MAE 148**, designed to follow an AprilTag target and provide access to stored items through a rotating compartment and motorized scissor lift.
 
-**My role:** Hardware integration, Arduino motor control, power distribution, and system debugging.
+**My role:** Hardware integration, Raspberry Pi–Arduino communication, motor control, power distribution, and debugging.
 
-![Robobutler assembled prototype](media/robot.jpg)
-
+![RoboButler assembled prototype](media/robot.jpg)
 
 ## Overview
 
-Walking between classes across UCSD's large campus can be tiring, especially while carrying a heavy backpack. Our team wanted to explore a robot that could follow a student and carry some of their belongings.
+Walking between classes across UCSD's large campus can be tiring, especially while carrying a heavy backpack. Our team explored a robot that could follow a student carrying an AprilTag and transport some of their belongings.
 
-Robobutler uses an **AprilTag as the visual target** for following a person. To make stored items easier to reach, the design combines a **servo-driven rotating compartment** with a **stepper-driven scissor lift**. Hand gestures select a compartment position and command the lift to extend or return. The intended lift travel was approximately a couple of feet, bringing items closer to the user's reach.
+At the destination, hand gestures select a compartment position and extend a stepper-driven scissor lift to make items easier to reach. A fist commands the lift to retract. The intended lift travel was approximately a couple of feet; measured travel and payload capacity have not been established.
 
-The project consists of two subsystems: autonomous navigation and gesture-controlled actuation. **These subsystems were tested separately; automatic transition from navigation to gesture control remains future work.** The prototype explores the campus carrying concept; backpack payload capacity and full campus operation have not been established in the project documentation.
-
-https://youtu.be/hY5M1MJWAxY
-
-https://youtube.com/shorts/GXT1gASVuJs
+**Project status:** Navigation and gesture-controlled actuation were tested separately during the course. This repository also contains a **post-course, software-tested integration prototype** that coordinates both subsystems. The integrated application has **not been tested on the physical robot**, which I no longer have access to after completing the course.
 
 ## My Contributions
 
-My work focused on connecting the robot's electronics, power system, and actuators:
+My work focused on connecting and debugging the robot's electronics and actuators:
 
-- Integrated Raspberry Pi-to-Arduino Mega USB serial communication to translate gesture commands into motor actions.
-- Developed Arduino control for servo positioning and stepper-driven extension and retraction of the mechanism.
-- Wired and configured the DRV8825 stepper driver, including STEP/DIR control and motor connections.
-- Designed and tested power distribution for the motors and control electronics.
-- Tuned the stepper driver's current limit and investigated overheating and unreliable motor operation.
-- Tested and debugged wiring, serial communication, and actuator response during subsystem integration.
+- Integrated Raspberry Pi-to-Arduino Mega USB serial communication for gesture-driven motor commands.
+- Developed Arduino control for compartment servo positioning and stepper-driven lift extension and retraction.
+- Wired and configured the DRV8825 stepper driver and investigated motor response and connection issues.
+- Integrated power distribution for the vehicle electronics, servo, and stepper motor.
+- Troubleshot wiring, serial communication, actuator operation, and driver overheating.
+- Adjusted the driver's current-limit setting during hardware debugging.
 
-The navigation software and mechanical design were team efforts. This repository highlights my hardware and actuation contributions while documenting the broader project.
+One stepper driver overheated and was replaced. I recall reducing the replacement driver's reference voltage from approximately **1.0 V to 0.5 V** while troubleshooting heat. These are recalled Vref settings, not verified motor-current measurements; the current relationship depends on the actual driver module.
 
-## Intended Operation
+Navigation software and mechanical design were team efforts. The later integration prototype was developed with AI assistance to explore the remaining software coordination problem.
 
-1. The user carries an AprilTag that serves as the robot's tracking target.
-2. The rover navigates toward the tag while carrying items.
-3. After the rover stops near the user, a hand gesture selects a storage position.
-4. The servo rotates the compartment, and the stepper motor extends the scissor lift to present the items.
-5. A fist gesture commands the lift to return.
+## How the Integrated Prototype Works
 
-This sequence describes the intended integrated experience. Navigation and gesture actuation currently run as separate subsystems.
-
-## System Architecture
-
-### Autonomous Navigation
-
-The OAK-D Lite supplies RGB and depth data for AprilTag detection and ground/obstacle perception. The navigation code includes FastSAM segmentation, EKF state estimation, path planning, and a Pure Pursuit-based controller that sends throttle and steering commands through the VESC.
-
-Although the controller source is named `mpc_controller.py`, the included implementation uses a geometric Pure Pursuit approach rather than an optimization-based MPC controller. EKF code is present, but the current controller does not use its estimated velocity for speed feedback.
-
-### Gesture-Controlled Actuation
-
-The Raspberry Pi processes OAK-D Lite images with MediaPipe Hands and sends text commands to the Arduino Mega over USB serial. The Arduino positions the compartment servo and sends STEP/DIR signals to the DRV8825 to move the scissor lift.
-
-The firmware supports four configured compartment positions. Once the lift is extended, additional position-selection commands are ignored until a return command retracts it. A Flask video stream displays gesture recognition results for testing.
-
-## System Signal Flow
+The Raspberry Pi runs a coordinator that manages navigation, camera ownership, gesture recognition, and Arduino commands. Because the navigation and gesture code use different DepthAI APIs, they run in **separate Python environments**, with only one vision process owning the OAK-D Lite at a time.
 
 ```mermaid
 flowchart TD
-    CAM["OAK-D Lite Camera"]
-
-    subgraph NAV["Autonomous Navigation — Raspberry Pi"]
-        TAG["AprilTag Detection"]
-        DEPTH["Ground / Obstacle Detection"]
-        EKF["EKF State Estimation"]
-        PLAN["Path Planning"]
-        CTRL["Pure Pursuit Controller"]
-
-        TAG --> PLAN
-        DEPTH --> PLAN
-        TAG --> EKF
-        PLAN --> CTRL
-    end
-
-    CAM -->|"RGB images"| TAG
-    CAM -->|"RGB and depth"| DEPTH
-    CTRL -->|"USB serial"| VESC["VESC Motor Controller"]
-    VESC --> DRIVE["Drive Motor"]
-    VESC --> STEER["Steering Servo"]
-
-    subgraph GEST["Gesture Control — Raspberry Pi"]
-        HAND["MediaPipe Hand Landmarks"]
-        CLASS["Gesture Classification and Filtering"]
-        HAND --> CLASS
-    end
-
-    CAM -->|"RGB images"| HAND
-    CLASS -->|"USB serial commands"| ARD["Arduino Mega"]
-    ARD -->|"Servo pulses"| SERVO["Compartment Servo"]
-    SERVO --> ROTATE["Storage Compartment Rotation"]
-    ARD -->|"STEP / DIR"| DRIVER["DRV8825 Driver"]
-    DRIVER -->|"Motor coil currents"| STEP["Stepper Motor"]
-    STEP --> LIFT["Scissor Lift Extension / Retraction"]
+    NAV["Navigate toward selected AprilTag"] --> STOP["Request vehicle stop"]
+    STOP -->|"Operator confirms standstill"| GEST["Release navigation camera; start gesture mode"]
+    GEST -->|"Selection gesture"| EXT["Rotate compartment and extend lift"]
+    EXT -->|"Fist"| RET["Retract lift; remain parked"]
+    RET -->|"Motion complete and operator confirms stow"| READY["Ready to resume"]
+    READY -->|"Hold thumbs-up for two seconds"| SWITCH["Release gesture camera; restart navigation"]
+    SWITCH --> NAV
 ```
 
-**Note:** Navigation and gesture-controlled actuation were tested separately. Automatic switching between them remains future work. The EKF branch is shown separately because the current controller does not use its estimated velocity for speed feedback. Power wiring is omitted from this diagram.
+The coordinator keeps the Arduino connection open across mode changes and requires a camera worker to release its resources and exit before starting the next worker. Gesture processing runs independently of the optional video preview.
 
+**A completed movement command does not prove physical position.** Hardware mode still requires operator confirmation that the vehicle has stopped and that the lift is stowed. Thumbs-up replaces the typed resume command after stow confirmation. Navigation then requires a fresh observation of the selected tag; if the tag remains within the arrival threshold, the vehicle stays parked.
+
+### Gesture Commands
+
+| Gesture | Requested action |
+|---|---|
+| Point | Servo to 0°, then extend the lift |
+| Peace | Servo to 90°, then extend the lift |
+| Thumb, index, middle, and ring extended; pinky folded | Servo to 180°, then extend the lift |
+| Open palm | Servo to 270°, then extend the lift |
+| Fist | Retract the lift and remain parked |
+| Upright thumbs-up held for two seconds | Resume navigation after confirmed stow |
+
+These angles are inherited software settings. The physical servo's supported travel and pulse range still need verification. Additional compartment selections are blocked while the lift is extended or an actuator command is pending.
 
 ## Hardware and Software
 
 | Area | Components and tools |
 |---|---|
 | Computing and vision | Raspberry Pi, OAK-D Lite, Arduino Mega |
-| Vehicle control | RC car chassis, VESC motor controller, drive motor, steering servo |
-| Item access | Compartment servo, stepper motor, DRV8825 driver, scissor-lift mechanism |
-| Power | LiPo battery, DC-DC converters / UBEC, motor and logic power wiring |
-| Software | Python, Arduino C/C++, DepthAI, OpenCV, MediaPipe, PySerial, Flask |
-| Navigation | AprilTag detection, NumPy/SciPy, FastSAM, Pure Pursuit control |
+| Vehicle control | RC chassis, VESC motor controller, drive motor, steering servo |
+| Item access | Compartment servo, stepper motor, DRV8825 driver, scissor lift |
+| Power | Approximately 15 V LiPo, anti-spark switch, actuator conversion to 5 V for the servo and 12 V for the motor supply |
+| Navigation | AprilTag detection, RGB/depth processing, FastSAM, Pure Pursuit control |
+| Gesture recognition | MediaPipe Hands, rule-based classification, gesture stability filtering |
+| Integration | Python processes, USB serial, command acknowledgements, nonblocking Arduino firmware |
 
-## Results and Limitations
+The navigation controller is named `mpc_controller.py`, but implements **Pure Pursuit steering and proportional command generation**, not optimization-based MPC. EKF code is present, but estimated velocity is overridden in the controller; this is not validated EKF-based speed feedback.
 
-The team repository documents separate testing of the navigation and gesture-control subsystems, including camera processing, VESC command output, Raspberry Pi-to-Arduino communication, and servo/stepper operation.
+Hardware resources: [power distribution](hardware/schematics/power_distribution.png), [actuator wiring drawing](hardware/schematics/DRV8825_wiring_diagram.png), and [CAD files](hardware/cad/). The drawings document the project and require verification against the actual components before rebuilding. The CAD collection includes inherited chassis designs; a mount's presence does not establish that its corresponding sensor was used on RoboButler.
 
-Remaining work includes:
+## Validation and Limitations
 
-- Integrating the automatic transition from navigation to gesture mode.
-- Coordinating access to the shared OAK-D Lite camera.
-- Improving navigation tuning and testing repeatability.
-- Measuring lift travel, payload capacity, and reliability under load.
-- Validating the complete carrying-and-item-access sequence.
+| Scope | Evidence and status |
+|---|---|
+| Course hardware work | Separate navigation and gesture/actuator subsystem testing |
+| Integration software | Recorded run of **62 automated tests passing**, with no skips |
+| Simulated sequence | Navigation → gesture mode → extension → retraction → confirmed stow → thumbs-up → navigation |
+| Full robot integration | Not physically tested |
 
-The existing navigation code uses **DepthAI 2.x**, while the documented gesture setup uses **DepthAI 3.6.1**. These versions require separate software environments unless the code is updated.
+The automated checks exercise mode transitions, camera-process handoff, stale observations, serial failures, command acknowledgements, resume conditions, and firmware behavior with mocked hardware. The demo uses synthetic observations and simulated devices; it does not simulate vehicle dynamics, camera recognition accuracy, or lift mechanics. The firmware check compiles against host-side Arduino mocks, not the Mega toolchain.
+
+Remaining work requires robot access: verify stopping and holding behavior, servo limits, stepper direction and travel, lift position sensing, payload capacity, Pi dependency compatibility, perception performance, and the complete operating sequence. Zero VESC duty may allow coasting and does not establish physical standstill.
+
+See the [validation report](docs/validation.md), [recorded test output](docs/test-results.txt), and [demo output](docs/demo-output.txt).
+
+## Try the Software Demo
+
+From the repository root, using Python 3.10 or newer:
+
+```bash
+python run_robot.py --demo
+```
+
+No robot, camera, Arduino, DepthAI, or MediaPipe installation is needed for this demo. It should finish with:
+
+```text
+PASS: navigation -> gesture -> extend -> retract -> confirmed stow -> thumbs-up -> navigation
+```
+
+Run the automated checks with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Most checks use only Python's standard library. Three controller checks require NumPy, and the firmware check requires `g++`; those checks are skipped if their dependencies are unavailable. On Windows, use `py` if `python` is unavailable.
+
+Hardware operation uses separate navigation and gesture environments and verified USB device identities. See the [integration guide](docs/integration-guide.md) for configuration, operator confirmations, and hardware prerequisites.
 
 ## Repository Guide
 
-The portfolio repository is organized around the following areas:
-
-| Folder | Contents |
+| Location | Contents |
 |---|---|
-| `software/gesture_control/` | Raspberry Pi gesture recognition and serial communication |
-| `software/arduino/` | Servo and stepper control firmware |
-| `software/navigation/` | Team navigation code and setup notes |
-| `hardware/` | Wiring diagrams, power distribution, component details, and selected CAD files |
-| `docs/` | Testing results and debugging notes |
-| `media/` | Prototype photos, diagrams, and demonstration images |
+| `run_robot.py` | Entry point for the demo and supervised hardware mode |
+| `software/integration/` | Coordinator, process management, serial interfaces, and simulation |
+| `software/navigation/` | Adapted team navigation code and FastSAM model |
+| `software/gesture_control/` | Gesture classification and optional video preview |
+| `software/arduino/` | Updated servo/stepper firmware for the integration protocol |
+| `tests/` | Automated software tests and hardware mocks |
+| `docs/` | Integration guide, serial protocol, validation, and source attribution |
+| `hardware/` | Power and wiring drawings, CAD, and mounting designs |
+| `media/` | Prototype photographs and assembly images |
+| `archive/software/` | Original course subsystem code |
 
-<!-- Populate these folders before publishing this guide. -->
+The original gesture application used Flask. The integrated application uses an optional read-only preview without Flask. Its Arduino firmware also uses an updated command protocol, so the archived sketch is not interchangeable with the integrated firmware.
 
-## Demonstrations
+## Course Demonstrations
 
-<!-- Add real media before publishing:
-- A short video showing compartment rotation, lift extension, and retraction.
-- A separate AprilTag navigation video, labeled as a subsystem demonstration.
-- Photos of the mechanism in its lowered and raised positions.
-Use a video-hosting link for full videos rather than committing large video files.
--->
+These videos document the course prototype and subsystem work. They do not demonstrate the later integrated application.
 
-Demonstration media will document navigation and gesture-controlled actuation separately.
+- [Course project video](https://youtu.be/hY5M1MJWAxY)
+- [Additional prototype clip](https://youtube.com/shorts/GXT1gASVuJs)
 
 ## Team Project and Credits
 
 Developed for **ECE/MAE 148 — Introduction to Autonomous Vehicles**, University of California, San Diego, Spring 2026.
 
-This is a personal portfolio version of a team project. My contributions focus on hardware integration, power distribution, Arduino actuation, and debugging. Team-developed navigation software and mechanical designs are included with attribution.
+This personal portfolio repository highlights my hardware integration, Arduino actuation, power distribution, and debugging contributions. Team-developed navigation software and mechanical designs are retained with attribution; post-course integration changes are documented separately from the original hardware work.
 
-[Original team repository](https://github.com/UCSD-Silberman-Classes-and-Projects/spring-2026-final-project-team-17)
-
-<!-- Add teammates' names and specific design/code credits when copying their work. -->
-
+- [Original team repository](https://github.com/UCSD-Silberman-Classes-and-Projects/spring-2026-final-project-team-17)
+- [Source attribution and integration changes](docs/sources.md)
