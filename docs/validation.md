@@ -1,6 +1,5 @@
 # Validation report
 
-Integration candidate based on team source commit `5b2ddda989908b18566bfb2381e0f541582ae974`.
 
 **Result: 62 automated tests passed, zero failures, zero skips.** The default subprocess demo also completed successfully in a separate run. All Python files passed syntax compilation. Full captured outputs are in `test-results.txt` and `demo-output.txt`.
 

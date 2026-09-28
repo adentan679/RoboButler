@@ -1,14 +1,13 @@
 # RoboButler: integrated navigation and gesture control
 
-A runnable integration candidate based on UCSD ECE/MAE 148 team 17's source at commit `5b2ddda989908b18566bfb2381e0f541582ae974`.
 
-**Start with the simulator. No robot, camera, Arduino, DepthAI, or MediaPipe installation is needed for the demo.** Hardware mode is separately configured and remains untested on the robot. This package replaces the earlier Step 1 ZIP as the integration workspace; extract it into a new folder rather than mixing versions.
+**Start with the simulator. No robot, camera, Arduino, DepthAI, or MediaPipe installation is needed for the demo.** Hardware mode is separately configured and remains untested on the robot. The active integration code is in the repository root and `software/`. Original course subsystem code is preserved in `archive/software/`.
 
-The thumbs-up update changes the Python coordinator/classifier and demo. If you already installed the integrated `ROBOBUTLER1` Arduino firmware from the preceding package, it does not need another update for this gesture.
+The integrated application requires the `ROBOBUTLER1` Arduino firmware in `software/arduino/project_servo_stepper/`. The archived course sketch uses a different protocol and is not compatible with this application. Thumbs-up return is handled by the Python coordinator; it does not send an Arduino resume command.
 
 ## Run on your computer
 
-Extract the ZIP, open a terminal in the `Robobutler_Integrated` folder, and run:
+Clone or download this repository, then open a terminal in the repository root—the folder containing `run_robot.py`—and run:
 
 ```bash
 python run_robot.py --demo
@@ -34,19 +33,28 @@ Run the tests:
 python -m unittest discover -s tests -v
 ```
 
-Most tests need only Python. Three actual path-controller tests require NumPy. The optional native Arduino test requires `g++`; those tests are reported as skipped when their dependencies are unavailable. To include the controller checks, install NumPy in a test environment. The validation included with this package ran all tests without skips. See `docs/validation.md` and `docs/test-results.txt`.
+Most tests need only Python. Three actual path-controller tests require NumPy. The optional native Arduino test requires `g++`; those tests are reported as skipped when their dependencies are unavailable. To include the controller checks, install NumPy in a test environment. The recorded validation run passed all 62 tests without skips. See the [validation report](validation.md) and [test output](test-results.txt).
 
 ## What is integrated
 
 - A single coordinator controls navigation, stopping, camera release, gesture mode, actuator motion and return to navigation.
+
 - Navigation and gesture camera workers use separate interpreters, retaining DepthAI v2 and v3 respectively.
+
 - One parent-owned VESC writer accepts expiring drive commands. It continues sending zero duty during gesture mode, worker startup and handoff.
+
 - One Arduino USB connection stays open for the entire session. Switching camera workers does not reopen/reset the Arduino.
+
 - Navigation must release its camera **and exit successfully** before the gesture worker is launched; the same rule applies in the other direction.
+
 - Gesture inference runs continuously on fresh frames, whether or not anyone opens the optional preview.
+
 - Five fresh observations stabilize a gesture. Holding a gesture fires it once; changing to another stable gesture permits a new command. Three neutral frames rearm the same gesture.
+
 - Command IDs and ACK/DONE replies associate each movement with its completion. The coordinator accepts only one actuator command at a time.
+
 - The near-target controller now uses a valid closer endpoint instead of rejecting all waypoints within 1.2 m.
+
 - Arrival is latched by the coordinator. Tag movement does not automatically restart the vehicle while serving the user.
 
 ## Mode sequence and return behavior
@@ -96,24 +104,29 @@ Because the reviewed robot has no established physical standstill or lift-home f
 | Fist | `RETURN` | Retract; remain parked |
 | Upright thumbs-up, four fingers folded | Supervisor only | Hold for two seconds after confirmed stow to return to navigation |
 
-The original FOUR-finger condition was mislabeled THREE. This package calls it `FOUR`; the physical rule and command mapping are otherwise retained. The rule-based classifier remains orientation-sensitive and has not been visually revalidated here. Keep the thumb pointing upward in the camera image with the other four fingers folded. A missing hand, another gesture, or a gap over 0.3 seconds between fresh detections restarts the resume hold. The hold starts only after stow acknowledgement and no pending actuator command. Its duration and maximum capture gap are configurable as `resume_hold_seconds` and `resume_max_gap_seconds`.
+The original FOUR-finger condition was mislabeled THREE. The integrated classifier calls it `FOUR`; the physical rule and command mapping are otherwise retained. The rule-based classifier remains orientation-sensitive and has not been visually revalidated here. Keep the thumb pointing upward in the camera image with the other four fingers folded. A missing hand, another gesture, or a gap over 0.3 seconds between fresh detections restarts the resume hold. The hold starts only after stow acknowledgement and no pending actuator command. Its duration and maximum capture gap are configurable as `resume_hold_seconds` and `resume_max_gap_seconds`.
 
 ## Hardware setup — for a later robot session
 
 You do not need these steps to run the demo.
 
-1. Retain a backup of the team firmware. The new host requires the new `ROBOBUTLER1` firmware in this package; the old sketch's free-text replies are incompatible. Open `software/arduino/project_servo_stepper/project_servo_stepper.ino` in Arduino IDE, select Arduino Mega and compile/upload during a supervised bench session. The host-side test is not an AVR-board compilation.
+1. Retain a backup of the team firmware. The integrated host requires the `ROBOBUTLER1` firmware in this repository; the old sketch's free-text replies are incompatible. Open `software/arduino/project_servo_stepper/project_servo_stepper.ino` in Arduino IDE, select Arduino Mega and compile/upload during a supervised bench session. The host-side test is not an AVR-board compilation.
+
 2. Verify the actual servo permits the existing 500–2500 µs / 270° mapping. Verify DRV8825 wiring, current setting, direction, microstepping and travel. The existing 300 pulses per movement and 1000 µs half-period are retained as configuration, not measured revolutions or safe lift limits. Pins remain servo D5, DIR D2, STEP D3, baud 9600; enable D8 remains unused.
+
 3. Create/reuse separate Pi environments. Install `requirements.txt` in the supervisor environment, `software/navigation/requirements.txt` in the navigation environment and `software/gesture_control/requirements.txt` in the gesture environment. Do not merge the DepthAI v2/v3 dependencies into one environment. Pi wheel availability and full dependency resolution were not tested here.
+
 4. Copy `config.example.json` to `config.local.json`. Set both absolute Python interpreter paths and physically verified, distinct `/dev/serial/by-id/` device paths. No numbered-port fallback exists. The software cannot independently authenticate the VESC from the path name.
+
 5. Set the selected AprilTag ID and measured black-square tag size. `0.15 m` and arrival distance `0.5 m` are inherited starting values, not calibration results. Arrival is camera-to-tag range, not bumper clearance. Establish actual stopping/holding behavior and the VESC's own loss-of-command timeout. Zero duty can coast and does not guarantee a stationary vehicle.
+
 6. Only after reviewing those hardware settings, set `hardware_reviewed` to `true` and run:
 
 ```bash
 python run_robot.py --hardware --config config.local.json
 ```
 
-The original team model file is included at `software/navigation/FastSAM-s.pt`. Paths in config for model weights are relative to the package folder; interpreter paths must be absolute.
+The original team model file is included at `software/navigation/FastSAM-s.pt`. Paths in config for model weights are relative to the repository root; interpreter paths must be absolute.
 
 The terminal commands are:
 
@@ -132,11 +145,17 @@ Optional preview: set `preview_port` to `5000` and visit `http://127.0.0.1:5000`
 ## Failure behavior and limits
 
 - Target loss or obstruction withdraws the driving command. A different tag cannot take over.
+
 - Stale frames, startup/release timeouts, worker crashes, serial errors, missing movement completion and Arduino reset latch FAULT. There is no automatic reconnect-and-drive path.
+
 - A VESC writer thread expires drive permission even if the supervisor stops refreshing it. Pi/process failure still requires a controller-side timeout; the software thread is not a hardware emergency stop.
+
 - On fault/shutdown, the host requests zero drive and sends Arduino STOP. Firmware stops generating step pulses, invalidates position and holds existing outputs. It does not automatically retract, detach the servo or disable stepper holding torque.
+
 - Recovery requires resolving the failure and restarting, with physical state verification. Reopening USB may reset the Mega. The new sketch makes no servo move at boot, but electrical/mechanical reset behavior still needs testing.
+
 - Existing perception and path-planning algorithms are retained. FastSAM, AprilTag accuracy, obstacle masking, camera calibration, speed, slopes, payload and physical stops have not been validated by these tests. The controller still overrides EKF velocity with zero, and the bridge retains its 0.07 fixed positive-duty mapping. This is not validated closed-loop speed control.
+
 - Freshness thresholds can cause faults on an overloaded Pi. Measure processing latency before tuning them; increasing a timeout also increases the maximum age of a drive request.
 
-No changes were pushed to the team repository. Keep this separate integration candidate distinguishable from the team's previously demonstrated subsystem work.
+This is a post-course integration prototype. The course demonstrations show the original subsystem work; the integrated sequence has been checked in software but has not been validated on the physical robot. See the [project overview](../README.md) and [original course code](../archive/software/).

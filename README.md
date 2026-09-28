@@ -14,6 +14,13 @@ At the destination, hand gestures select a compartment position and extend a ste
 
 **Project status:** Navigation and gesture-controlled actuation were tested separately during the course. This repository also contains a **post-course, software-tested integration prototype** that coordinates both subsystems. The integrated application has **not been tested on the physical robot**, which I no longer have access to after completing the course.
 
+## Course Demonstrations
+
+These videos document the course prototype and subsystem work. They do not demonstrate the later integrated application.
+
+- [Hand Gesture Control Demonstration](https://youtu.be/hY5M1MJWAxY)
+- [AprilTag Detection Demonstration](https://youtube.com/shorts/GXT1gASVuJs)
+
 ## My Contributions
 
 My work focused on connecting and debugging the robot's electronics and actuators:
@@ -133,12 +140,6 @@ Hardware operation uses separate navigation and gesture environments and verifie
 
 The original gesture application used Flask. The integrated application uses an optional read-only preview without Flask. Its Arduino firmware also uses an updated command protocol, so the archived sketch is not interchangeable with the integrated firmware.
 
-## Course Demonstrations
-
-These videos document the course prototype and subsystem work. They do not demonstrate the later integrated application.
-
-- [Course project video](https://youtu.be/hY5M1MJWAxY)
-- [Additional prototype clip](https://youtube.com/shorts/GXT1gASVuJs)
 
 ## Team Project and Credits
 
