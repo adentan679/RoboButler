@@ -1,7 +1,7 @@
 # RoboButler: integrated navigation and gesture control
 
 
-**Start with the simulator. No robot, camera, Arduino, DepthAI, or MediaPipe installation is needed for the demo.** Hardware mode is separately configured and remains untested on the robot. The active integration code is in the repository root and `software/`. Original course subsystem code is preserved in `archive/software/`.
+**Start with the simulator. No robot, camera, Arduino, DepthAI, or MediaPipe installation is needed for the demo.** The repository root and `software/` contain the active unified implementation, including navigation, gesture recognition, actuator control, device ownership, and system-level coordination. The original course subsystem snapshot is preserved in `archive/software/` for traceability. The integrated software path is validated by the automated suite; the available project evidence supports hardware testing of the subsystems rather than an end-to-end physical validation of this exact build.
 
 The integrated application requires the `ROBOBUTLER1` Arduino firmware in `software/arduino/project_servo_stepper/`. The archived course sketch uses a different protocol and is not compatible with this application. Thumbs-up return is handled by the Python coordinator; it does not send an Arduino resume command.
 
@@ -106,7 +106,7 @@ Because the reviewed robot has no established physical standstill or lift-home f
 
 The original FOUR-finger condition was mislabeled THREE. The integrated classifier calls it `FOUR`; the physical rule and command mapping are otherwise retained. The rule-based classifier remains orientation-sensitive and has not been visually revalidated here. Keep the thumb pointing upward in the camera image with the other four fingers folded. A missing hand, another gesture, or a gap over 0.3 seconds between fresh detections restarts the resume hold. The hold starts only after stow acknowledgement and no pending actuator command. Its duration and maximum capture gap are configurable as `resume_hold_seconds` and `resume_max_gap_seconds`.
 
-## Hardware setup — for a later robot session
+## Hardware setup
 
 You do not need these steps to run the demo.
 
@@ -158,4 +158,4 @@ Optional preview: set `preview_port` to `5000` and visit `http://127.0.0.1:5000`
 
 - Freshness thresholds can cause faults on an overloaded Pi. Measure processing latency before tuning them; increasing a timeout also increases the maximum age of a drive request.
 
-This is a post-course integration prototype. The course demonstrations show the original subsystem work; the integrated sequence has been checked in software but has not been validated on the physical robot. See the [project overview](../README.md) and [original course code](../archive/software/).
+The active repository is the unified RoboButler implementation. The original course subsystem snapshot remains in `archive/software/`, while the current supervisor connects navigation, gesture recognition, Arduino actuation, and return-to-navigation behavior into one software flow. The integrated sequence is validated in software; end-to-end physical verification of this exact build is not documented in the available project evidence. See the [project overview](../README.md) and [original course code](../archive/software/).
