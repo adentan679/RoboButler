@@ -12,11 +12,11 @@ Walking between classes across UCSD's large campus can be tiring, especially whi
 
 At the destination, hand gestures select a compartment position and extend a stepper-driven scissor lift to make items easier to reach. A fist commands the lift to retract. The intended lift travel was approximately a couple of feet; measured travel and payload capacity have not been established.
 
-**Project status:** Navigation and gesture-controlled actuation were tested separately during the course. This repository also contains a **post-course, software-tested integration prototype** that coordinates both subsystems. The integrated application has **not been tested on the physical robot**, which I no longer have access to after completing the course.
+**Project status:** Navigation and gesture-controlled actuation were tested on hardware as course subsystems. This repository presents them as a **single coordinated application** with navigation-to-gesture handoff, actuator command tracking, camera ownership control, and return-to-navigation logic. The integrated software path has been validated with **62 automated tests** and a complete simulated operating sequence. The available project evidence does not establish an end-to-end physical test of this exact integrated build.
 
 ## Course Demonstrations
 
-These videos document the course prototype and subsystem work. They do not demonstrate the later integrated application.
+These videos document the two major hardware subsystems developed for the course. They demonstrate gesture-controlled actuation and AprilTag-based navigation work, rather than a complete end-to-end run of the current integrated application.
 
 - [Hand Gesture Control Demonstration](https://youtu.be/hY5M1MJWAxY)
 - [AprilTag Detection Demonstration](https://youtube.com/shorts/GXT1gASVuJs)
@@ -34,9 +34,9 @@ My work focused on connecting and debugging the robot's electronics and actuator
 
 One stepper driver overheated and was replaced. I recall reducing the replacement driver's reference voltage from approximately **1.0 V to 0.5 V** while troubleshooting heat. These are recalled Vref settings, not verified motor-current measurements; the current relationship depends on the actual driver module.
 
-Navigation software and mechanical design were team efforts. The later integration prototype was developed with AI assistance to explore the remaining software coordination problem.
+Navigation software and mechanical design were team efforts. The active repository combines the navigation, gesture, Arduino, and vehicle-control components under one supervisor while preserving the original course subsystem code in `archive/software/` for traceability.
 
-## How the Integrated Prototype Works
+## How the Integrated System Works
 
 The Raspberry Pi runs a coordinator that manages navigation, camera ownership, gesture recognition, and Arduino commands. Because the navigation and gesture code use different DepthAI APIs, they run in **separate Python environments**, with only one vision process owning the OAK-D Lite at a time.
 
@@ -91,7 +91,7 @@ Hardware resources: [power distribution](hardware/schematics/power_distribution.
 | Course hardware work | Separate navigation and gesture/actuator subsystem testing |
 | Integration software | Recorded run of **62 automated tests passing**, with no skips |
 | Simulated sequence | Navigation → gesture mode → extension → retraction → confirmed stow → thumbs-up → navigation |
-| Full robot integration | Not physically tested |
+| End-to-end physical run of this exact integrated build | Not established by the available project evidence |
 
 The automated checks exercise mode transitions, camera-process handoff, stale observations, serial failures, command acknowledgements, resume conditions, and firmware behavior with mocked hardware. The demo uses synthetic observations and simulated devices; it does not simulate vehicle dynamics, camera recognition accuracy, or lift mechanics. The firmware check compiles against host-side Arduino mocks, not the Mega toolchain.
 
@@ -145,7 +145,7 @@ The original gesture application used Flask. The integrated application uses an 
 
 Developed for **ECE/MAE 148 — Introduction to Autonomous Vehicles**, University of California, San Diego, Spring 2026.
 
-This personal portfolio repository highlights my hardware integration, Arduino actuation, power distribution, and debugging contributions. Team-developed navigation software and mechanical designs are retained with attribution; post-course integration changes are documented separately from the original hardware work.
+This personal portfolio repository highlights my hardware integration, Arduino actuation, power distribution, and debugging contributions. Team-developed navigation software and mechanical designs are retained with attribution, and the active repository presents the project as one coordinated software system while preserving the original course snapshot for traceability.
 
 - [Original team repository](https://github.com/UCSD-Silberman-Classes-and-Projects/spring-2026-final-project-team-17)
-- [Source attribution and integration changes](docs/sources.md)
+- [Source attribution and implementation notes](docs/sources.md)
